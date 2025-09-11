@@ -5,12 +5,15 @@ from random import uniform, choice
 import logging
 from urllib.parse import urljoin
 import re
+import os
 
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+review_counters = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
 
 USER_AGENTS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
@@ -78,7 +81,7 @@ def process_page(session, page, ratio):
         logger.info(f"Страница {page}, найдено отзывов: {len(review_divs)}")
         
         for review in review_divs:
-            process_review(session, review)
+            process_review(session, review, ratio)
             
         return True
 
@@ -87,7 +90,7 @@ def process_page(session, page, ratio):
         time.sleep(uniform(10, 20))
         return False
 
-def process_review(session, review):
+def process_review(session, review, ratio):
     try:
         review_link = None
         
@@ -121,13 +124,25 @@ def process_review(session, review):
         
         review_body = review_soup.find('div', class_='review-body')
         review_text = ' '.join(review_body.get_text(strip=True, separator=' ').split()) if review_body else "Не найдено"
+        content = f"""Заголовок: {title_text}
+                    Достоинства: {plus_text}
+                    Недостатки: {minus_text}
+                    Текст отзыва: {review_text}
+                    """
 
-        print("\n" + "="*50)
-        print(f"Заголовок: {title_text}")
-        print(f"Достоинства: {plus_text}")
-        print(f"Недостатки: {minus_text}")
-        print(f"Текст отзыва: {review_text[:200]}...")
-        print("="*50)
+        ratio_dir = f"dataset/ratio_{ratio}"
+        os.makedirs(ratio_dir, exist_ok=True)
+        global review_counters
+        review_counters[ratio] += 1
+        file_number = review_counters[ratio]
+        
+        filename = f"{file_number:04d}.txt"
+        filepath = os.path.join(ratio_dir, filename)
+        
+        with open(filepath, 'w', encoding='utf-8') as file:
+            file.write(content)
+        
+        logger.info(f"Отзыв с рейтингом {ratio} сохранен в файл: {filepath}")
 
     except Exception as e:
         logger.error(f"Ошибка при обработке отзыва: {e}")
