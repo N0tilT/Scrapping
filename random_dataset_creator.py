@@ -45,10 +45,14 @@ def create_random_dataset(source_dir: str, target_dir: str, annotation_file: str
                     shutil.copy2(file_path, new_path)
                     
                     abs_path = new_path.resolve()
-                    rel_path = new_path.relative_to(Path.cwd())
+                    try:
+                        rel_path = new_path.relative_to(Path.cwd())
+                    except ValueError:
+                        rel_path = abs_path
+                    
                     writer.writerow([abs_path, rel_path, class_name])
         
-        return f"Случайный датасет создан: {target_dir}"
+        return f"Случайный датасет создан: {target_dir}. Аннотация создана: {annotation_file}"
     
     except Exception as e:
         return f"Ошибка при создании случайного датасета: {str(e)}"

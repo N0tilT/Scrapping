@@ -37,10 +37,14 @@ def reorganize_dataset(source_dir: str, target_dir: str, annotation_file: str) -
                     shutil.copy2(file_path, new_path)
                     
                     abs_path = new_path.resolve()
-                    rel_path = new_path.relative_to(Path.cwd())
+                    try:
+                        rel_path = new_path.relative_to(Path.cwd())
+                    except ValueError:
+                        rel_path = abs_path
+                    
                     writer.writerow([abs_path, rel_path, class_name])
         
-        return f"Датасет реорганизован: {target_dir}"
+        return f"Датасет реорганизован: {target_dir}. Аннотация создана: {annotation_file}"
     
     except Exception as e:
         return f"Ошибка при реорганизации датасета: {str(e)}"

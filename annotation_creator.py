@@ -30,7 +30,11 @@ def create_annotation_dataset(base_dir: str, output_file: str) -> str:
                 
                 for file_path in class_dir.glob("*.txt"):
                     abs_path = file_path.resolve()
-                    rel_path = file_path.relative_to(Path.cwd())
+                    try:
+                        rel_path = file_path.relative_to(Path.cwd())
+                    except ValueError:
+                        rel_path = abs_path
+                    
                     writer.writerow([abs_path, rel_path, class_name])
         
         return f"Аннотация успешно создана: {output_file}"
@@ -56,6 +60,7 @@ def get_dataset_stats(base_dir: str) -> Tuple[int, int]:
 
 
 if __name__ == "__main__":
+    # Тестирование функции
     result = create_annotation_dataset("dataset", "annotation.csv")
     print(result)
     good, bad = get_dataset_stats("dataset")
