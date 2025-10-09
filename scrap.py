@@ -1,8 +1,6 @@
 from playwright.sync_api import sync_playwright
 import random
 import time
-import json
-import csv
 from datetime import datetime
 import re
 from math import ceil
@@ -405,7 +403,7 @@ def main():
         
         total_reviews = scraper.scrape_multiple_films(
             film_ids=film_ids,
-            statuses=['bad'],
+            statuses=['good','bad'],
             per_page=50
         )
         
