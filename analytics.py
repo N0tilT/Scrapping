@@ -12,20 +12,19 @@ from natasha import (
     Doc
 )
 
-pd.set_option('display.max_columns', None)
-pd.set_option('display.width', None)
-
 class TextAnalyzer:
-    def __init__(self, output_dir='output_plots'):
+    def __init__(self, output_dir='output_plots', threshold = 1000):
         """Инициализация компонентов Natasha"""
         self.segmenter = Segmenter()
         self.morph_vocab = MorphVocab()
         self.emb = NewsEmbedding()
         self.morph_tagger = NewsMorphTagger(self.emb)
         self.output_dir = output_dir
+        self.threshold=threshold
 
         os.makedirs(self.output_dir,exist_ok=True)
         self.stop_words = {
+            'весь','фильм','это','который',
             'и', 'в', 'во', 'не', 'что', 'он', 'на', 'я', 'с', 'со', 'как', 'а',
             'то', 'все', 'она', 'так', 'его', 'но', 'да', 'ты', 'к', 'у', 'же',
             'вы', 'за', 'бы', 'по', 'только', 'ее', 'мне', 'было', 'вот', 'от',
@@ -72,6 +71,9 @@ class TextAnalyzer:
                             'text': text,
                             'file_name': filename
                         })
+                        if len(records)>=self.threshold: 
+                            break
+                    
         if os.path.exists(bad_path):
             for filename in os.listdir(bad_path):
                 if filename.endswith('.txt'):
@@ -83,6 +85,9 @@ class TextAnalyzer:
                             'text': text,
                             'file_name': filename
                         })
+                        if len(records)>=self.threshold*2: 
+                            break
+
         df = pd.DataFrame(records)
         
         return df
@@ -118,9 +123,6 @@ class TextAnalyzer:
 
     def get_text_statistics(self, df):
         """Вычисление статистической информации для числовых колонок"""
-        print("\n" + "=" * 50)
-        print("СТАТИСТИЧЕСКАЯ ИНФОРМАЦИЯ:")
-        print("=" * 50)
         
         numeric_columns = df.select_dtypes(include=['number']).columns
         for col in numeric_columns:
@@ -181,9 +183,6 @@ class TextAnalyzer:
         """
         Группировка по метке класса с вычислением статистики по количеству слов
         """
-        print("\n" + "=" * 50)
-        print("СТАТИСТИКА ПО ГРУППАМ:")
-        print("=" * 50)
         
         group_stats = df.groupby('review_type')['word_count'].agg([
             ('min_count', 'min'),
@@ -369,7 +368,7 @@ class TextAnalyzer:
         
 
 def main():
-    analyzer = TextAnalyzer()
+    analyzer = TextAnalyzer(threshold=5000)
     
     try:
         df = analyzer.analyze_texts_comprehensive(

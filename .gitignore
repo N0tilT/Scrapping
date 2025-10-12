@@ -1,5 +1,5 @@
-dataset
-output_plots
+dataset*
+output_plots*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
