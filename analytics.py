@@ -107,6 +107,8 @@ class TextAnalyzer:
         """
         Предобработка DataFrame с добавлением информации о фильмах.
         """
+        if df.empty:
+            return df
         df.columns = [col.lower().replace(' ', '_') for col in df.columns]
         
         print("ПРОВЕРКА НА НЕВАЛИДНЫЕ ЗНАЧЕНИЯ:")
