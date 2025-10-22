@@ -1,10 +1,13 @@
 import flet as ft
-from reader import read_file_content
+import base64
+import os
 from pathlib import Path
+from reader import read_file_content
 from annotation_creator import create_annotation_dataset, get_dataset_stats
 from dataset_reorganizer import reorganize_dataset, get_reorganized_stats
 from random_dataset_creator import create_random_dataset, get_random_stats
 from dataset_iterator import ReviewIterator
+from analytics import TextAnalyzer
 
 class MovieReviewApp:
     """Основной класс приложения для работы с датасетом ревью фильмов."""
@@ -12,9 +15,159 @@ class MovieReviewApp:
     def __init__(self):
         self.current_iterator = None
         self.annotation_file_path = ""
+        self.analyzer = TextAnalyzer(threshold=5000)
+        self.analysis_run = False 
         
+    def check_existing_plots(self):
+        """
+        Проверяет наличие существующих графиков в директории output_plots
+        
+        Returns:
+            bool: True если есть хотя бы один график, False если нет
+        """
+        if not os.path.exists('output_plots'):
+            return False
+        
+        plot_files = [
+            'word_histogram_Положительные.png',
+            'word_histogram_Отрицательные.png', 
+            'year_statistics.png',
+            'movie_statistics.png',
+            'word_distribution_by_class.png',
+            'reviews_distribution_pie.png',
+            'word_stats_by_class.png'
+        ]
+        
+        for plot_file in plot_files:
+            if os.path.exists(os.path.join('output_plots', plot_file)):
+                return True
+        return False
+    
+    def get_image_base64(self, image_path):
+        """
+        Читает изображение из файла и возвращает в формате base64
+        
+        Args:
+            image_path (str): Путь к файлу изображения
+            
+        Returns:
+            str: Изображение в формате base64 или None если файл не найден
+        """
+        try:
+            if os.path.exists(image_path):
+                with open(image_path, "rb") as image_file:
+                    encoded_string = base64.b64encode(image_file.read()).decode()
+                    return encoded_string
+            else:
+                print(f"Файл не найден: {image_path}")
+                return None
+        except Exception as e:
+            print(f"Ошибка при чтении изображения {image_path}: {e}")
+            return None
+    
+    def get_plot_image(self, filename):
+        """
+        Получает изображение графика из директории output_plots
+        
+        Args:
+            filename (str): Имя файла графика
+            
+        Returns:
+            ft.Image: Объект изображения для Flet
+        """
+        image_path = os.path.join('output_plots', filename)
+        base64_data = self.get_image_base64(image_path)
+        
+        if base64_data:
+            return ft.Image(
+                src_base64=base64_data,
+                width=600,
+                height=400,
+                fit=ft.ImageFit.CONTAIN
+            )
+        else:
+            return ft.Text(f"График не найден: {filename}", color=ft.Colors.RED)
+    
+    def load_existing_plots(self):
+        """Загружает существующие графики в интерфейс"""
+        if not self.check_existing_plots():
+            self.analytics_status.value = "Графики не найдены. Нажмите 'Запустить анализ' для генерации."
+            self.analytics_status.update()
+            return False
+        
+        self.analytics_plots_container.controls.clear()
+        
+        plot_files = [
+            'word_histogram_Положительные.png',
+            'word_histogram_Отрицательные.png', 
+            'year_statistics.png',
+            'movie_statistics.png',
+            'word_distribution_by_class.png',
+            'reviews_distribution_pie.png',
+            'word_stats_by_class.png'
+        ]
+        
+        loaded_count = 0
+        for plot_file in plot_files:
+            plot_image = self.get_plot_image(plot_file)
+            if isinstance(plot_image, ft.Image):
+                self.analytics_plots_container.controls.append(
+                    ft.Container(
+                        content=ft.Column([
+                            ft.Text(plot_file.replace('.png', '').replace('_', ' ').title(), 
+                                   size=16, weight=ft.FontWeight.BOLD),
+                            plot_image
+                        ]),
+                        padding=10,
+                        margin=5,
+                        border=ft.border.all(1, ft.Colors.GREY_400),
+                        border_radius=5
+                    )
+                )
+                loaded_count += 1
+        
+        self.analytics_status.value = f"Загружено графиков: {loaded_count}"
+        self.analytics_status.update()
+        return True
+    
+    def on_tab_change(self, e):
+        """Обработчик изменения вкладки"""
+        if e.control.selected_index == 1:
+            if not self.analysis_run:
+                if self.load_existing_plots():
+                    self.analytics_status.value = "Загружены существующие графики анализа"
+                    self.analysis_run = True
+                else:
+                    self.analytics_status.value = "Графики не найдены. Нажмите 'Запустить анализ' для генерации."
+                self.analytics_status.update()
+    
+    def run_analysis(self, e):
+        """Запускает анализ и обновляет интерфейс с графиками"""
+        self.analytics_progress.visible = True
+        self.analytics_status.value = "Запуск анализа..."
+        self.page.update()
+        
+        try:
+            df = self.analyzer.analyze_texts_comprehensive(
+                good_path='dataset/good',
+                bad_path='dataset/bad'
+            )
+            
+            self.analytics_status.value = f"Анализ завершен! Обработано отзывов: {len(df)}"
+            
+            self.load_existing_plots()
+            self.analysis_run = True
+            
+        except Exception as ex:
+            self.analytics_status.value = f"Ошибка анализа: {str(ex)}"
+            print(f"Ошибка анализа: {ex}")
+        
+        self.analytics_progress.visible = False
+        self.page.update()
+    
     def main(self, page: ft.Page):
         """Основная функция инициализации интерфейса."""
+        self.page = page
         page.title = "Movie Review Dataset Manager"
         page.theme_mode = ft.ThemeMode.LIGHT
         page.padding = 20
@@ -116,48 +269,86 @@ class MovieReviewApp:
             icon=ft.Icons.REFRESH
         )
         
-        page.add(
-            ft.Text("Менеджер датасета ревью фильмов", size=24, weight=ft.FontWeight.BOLD),
-            ft.Divider(),
-            
-            ft.Text("Основные операции:", size=18, weight=ft.FontWeight.BOLD),
-            self.source_dir_field,
-            
-            ft.Row([
-                self.annotation_file_field,
-                create_annotation_btn
-            ]),
-            
-            ft.Row([
-                self.target_dir_field,
-                reorganize_btn
-            ]),
-            
-            ft.Row([
-                self.random_dir_field,
-                random_dataset_btn
-            ]),
-            
-            self.result_text,
-            self.stats_text,
-            ft.Divider(),
-            
-            ft.Text("Итератор по классам:", size=18, weight=ft.FontWeight.BOLD),
-            ft.Row([
-                self.iterator_class_field,
-                self.iterator_file_field
-            ]),
-            
-            ft.Row([
-                next_instance_btn,
-                reset_iterator_btn
-            ]),
-            
-            self.iterator_result,
-            self.file_content_header,
-            self.file_name_text,
-            self.file_content_container
+        self.analytics_progress = ft.ProgressRing(visible=False)
+        self.analytics_status = ft.Text("", size=16, color=ft.Colors.BLUE)
+        
+        run_analysis_btn = ft.ElevatedButton(
+            "Запустить анализ",
+            on_click=self.run_analysis,
+            icon=ft.Icons.ANALYTICS,
+            style=ft.ButtonStyle(
+                color=ft.Colors.WHITE,
+                bgcolor=ft.Colors.BLUE
+            )
         )
+        
+        refresh_plots_btn = ft.ElevatedButton(
+            "Обновить графики",
+            on_click=lambda e: self.load_existing_plots(),
+            icon=ft.Icons.REFRESH
+        )
+        
+        self.analytics_plots_container = ft.Column(
+            scroll=ft.ScrollMode.ALWAYS,
+            height=600
+        )
+        
+        management_tab = ft.Tab(
+            text="Управление датасетом",
+            content=ft.Column([
+                ft.Text("Менеджер датасета ревью фильмов", size=24, weight=ft.FontWeight.BOLD),
+                ft.Divider(),
+                ft.Text("Основные операции:", size=18, weight=ft.FontWeight.BOLD),
+                self.source_dir_field,
+                ft.Row([self.annotation_file_field, create_annotation_btn]),
+                ft.Row([self.target_dir_field, reorganize_btn]),
+                ft.Row([self.random_dir_field, random_dataset_btn]),
+                self.result_text,
+                self.stats_text,
+                ft.Divider(),
+                ft.Text("Итератор по классам:", size=18, weight=ft.FontWeight.BOLD),
+                ft.Row([self.iterator_class_field, self.iterator_file_field]),
+                ft.Row([next_instance_btn, reset_iterator_btn]),
+                self.iterator_result,
+                self.file_content_header,
+                self.file_name_text,
+                self.file_content_container
+            ])
+        )
+        
+        analytics_tab = ft.Tab(
+            text="Аналитика",
+            content=ft.Column([
+                ft.Text("Аналитика отзывов фильмов", size=24, weight=ft.FontWeight.BOLD),
+                ft.Divider(),
+                ft.Row([
+                    run_analysis_btn,
+                    refresh_plots_btn,
+                    self.analytics_progress
+                ]),
+                self.analytics_status,
+                ft.Divider(),
+                ft.Text("Графики анализа:", size=18, weight=ft.FontWeight.BOLD),
+                self.analytics_plots_container
+            ])
+        )
+        
+        tabs = ft.Tabs(
+            selected_index=0,
+            animation_duration=300,
+            tabs=[management_tab, analytics_tab],
+            expand=True,
+            on_change=self.on_tab_change
+        )
+        
+        page.add(tabs)
+        
+        if self.check_existing_plots():
+            self.analytics_status.value = "Обнаружены существующие графики анализа"
+            self.analysis_run = True
+        else:
+            self.analytics_status.value = "Графики не найдены. Нажмите 'Запустить анализ' для генерации."
+        self.analytics_status.update()
     
     def create_annotation(self, e):
         """Обработчик создания аннотации."""

@@ -13,42 +13,48 @@ from natasha import (
 )
 
 class TextAnalyzer:
-    def __init__(self, output_dir='output_plots', threshold = 1000):
-        """Инициализация компонентов Natasha"""
+    def __init__(self, output_dir='output_plots', threshold=1000):
         self.segmenter = Segmenter()
         self.morph_vocab = MorphVocab()
         self.emb = NewsEmbedding()
         self.morph_tagger = NewsMorphTagger(self.emb)
         self.output_dir = output_dir
-        self.threshold=threshold
+        self.threshold = threshold
 
-        os.makedirs(self.output_dir,exist_ok=True)
+        os.makedirs(self.output_dir, exist_ok=True)
         self.stop_words = {
-            'весь','фильм','это','который',
-            'и', 'в', 'во', 'не', 'что', 'он', 'на', 'я', 'с', 'со', 'как', 'а',
-            'то', 'все', 'она', 'так', 'его', 'но', 'да', 'ты', 'к', 'у', 'же',
-            'вы', 'за', 'бы', 'по', 'только', 'ее', 'мне', 'было', 'вот', 'от',
-            'меня', 'еще', 'нет', 'о', 'из', 'ему', 'теперь', 'когда', 'даже',
-            'ну', 'вдруг', 'ли', 'если', 'уже', 'или', 'ни', 'быть', 'был',
-            'него', 'до', 'вас', 'нибудь', 'опять', 'уж', 'вам', 'ведь',
-            'там', 'потом', 'себя', 'ничего', 'ей', 'может', 'они', 'тут',
-            'где', 'есть', 'надо', 'ней', 'для', 'мы', 'тебя', 'их', 'чем',
-            'была', 'сам', 'чтоб', 'без', 'будто', 'чего', 'раз', 'тоже',
-            'себе', 'под', 'будет', 'ж', 'тогда', 'кто', 'этот', 'того',
-            'потому', 'этого', 'какой', 'совсем', 'ним', 'здесь', 'этом',
-            'один', 'почти', 'мой', 'тем', 'чтобы', 'нее', 'сейчас', 'были',
-            'куда', 'зачем', 'всех', 'никогда', 'можно', 'при', 'наконец',
-            'два', 'об', 'другой', 'хоть', 'после', 'над', 'больше', 'тот',
-            'через', 'эти', 'нас', 'про', 'всего', 'них', 'какая', 'много',
-            'разве', 'три', 'эту', 'моя', 'впрочем', 'хорошо', 'свою', 'этой',
-            'перед', 'иногда', 'лучше', 'чуть', 'том', 'нельзя', 'такой',
-            'им', 'более', 'всегда', 'конечно', 'всю', 'между'
+            'весь', 'свой','фильм', 'это', 'который', 'и', 'в', 'во', 'не', 'что', 'он', 'на', 'я', 'с', 'со', 'как', 'а',
+            'то', 'все', 'она', 'так', 'его', 'но', 'да', 'ты', 'к', 'у', 'же', 'вы', 'за', 'бы', 'по', 'только',
+            'ее', 'мне', 'было', 'вот', 'от', 'меня', 'еще', 'нет', 'о', 'из', 'ему', 'теперь', 'когда', 'даже',
+            'ну', 'вдруг', 'ли', 'если', 'уже', 'или', 'ни', 'быть', 'был', 'него', 'до', 'вас', 'нибудь', 'опять',
+            'уж', 'вам', 'ведь', 'там', 'потом', 'себя', 'ничего', 'ей', 'может', 'они', 'тут', 'где', 'есть', 'надо',
+            'ней', 'для', 'мы', 'тебя', 'их', 'чем', 'была', 'сам', 'чтоб', 'без', 'будто', 'чего', 'раз', 'тоже',
+            'себе', 'под', 'будет', 'ж', 'тогда', 'кто', 'этот', 'того', 'потому', 'этого', 'какой', 'совсем', 'ним',
+            'здесь', 'этом', 'один', 'почти', 'мой', 'тем', 'чтобы', 'нее', 'сейчас', 'были', 'куда', 'зачем', 'всех',
+            'никогда', 'можно', 'при', 'наконец', 'два', 'об', 'другой', 'хоть', 'после', 'над', 'больше', 'тот',
+            'через', 'эти', 'нас', 'про', 'всего', 'них', 'какая', 'много', 'разве', 'три', 'эту', 'моя', 'впрочем',
+            'хорошо', 'свою', 'этой', 'перед', 'иногда', 'лучше', 'чуть', 'том', 'нельзя', 'такой', 'им', 'более',
+            'всегда', 'конечно', 'всю', 'между'
         }
 
-    def _save_plot(self,filename,dpi=300,bbox_inches='tight'):
+    def _parse_movie_info(self, text):
+        """
+        Извлекает название фильма и год из текста отзыва.
+        """
+        lines = text.strip().split('\n')
+        if len(lines) > 0:
+            first_line = lines[0].strip()
+            year_match = re.search(r'\((\d{4})\)|,?\s*(\d{4})$', first_line)
+            if year_match:
+                year = year_match.group(1) or year_match.group(2)
+                title = first_line[:year_match.start()].strip().rstrip(',')
+                return title, int(year)
+        return "Неизвестный фильм", None
+
+    def _save_plot(self, filename, dpi=300, bbox_inches='tight'):
         """Сохраняет текущий график в файл"""
-        filepath=os.path.join(self.output_dir,filename)
-        plt.savefig(filepath,dpi=dpi,bbox_inches=bbox_inches,facecolor='white')
+        filepath = os.path.join(self.output_dir, filename)
+        plt.savefig(filepath, dpi=dpi, bbox_inches=bbox_inches, facecolor='white')
         plt.close()
 
     def load_reviews_from_folders(self, good_path='dataset/good', bad_path='dataset/bad'):
@@ -56,7 +62,7 @@ class TextAnalyzer:
         Загрузка отзывов из папок good и bad
         
         Returns:
-            pd.DataFrame: DataFrame с колонками ['review_type', 'text']
+            pd.DataFrame: DataFrame с колонками ['review_type', 'text', 'movie_title', 'year']
         """
         records = []
         
@@ -66,12 +72,15 @@ class TextAnalyzer:
                     with open(os.path.join(good_path, filename), 'r', encoding='utf-8') as file:
                         text = file.read().strip()
                     if text:
+                        movie_title, year = self._parse_movie_info(text)
                         records.append({
                             'review_type': 'good',
                             'text': text,
-                            'file_name': filename
+                            'file_name': filename,
+                            'movie_title': movie_title,
+                            'year': year
                         })
-                        if len(records)>=self.threshold: 
+                        if len(records) >= self.threshold: 
                             break
                     
         if os.path.exists(bad_path):
@@ -80,24 +89,23 @@ class TextAnalyzer:
                     with open(os.path.join(bad_path, filename), 'r', encoding='utf-8') as file:
                         text = file.read().strip()
                     if text:
+                        movie_title, year = self._parse_movie_info(text)
                         records.append({
                             'review_type': 'bad', 
                             'text': text,
-                            'file_name': filename
+                            'file_name': filename,
+                            'movie_title': movie_title,
+                            'year': year
                         })
-                        if len(records)>=self.threshold*2: 
+                        if len(records) >= self.threshold * 2: 
                             break
 
         df = pd.DataFrame(records)
-        
         return df
 
     def preprocess_dataframe(self, df):
         """
-        Предобработка DataFrame:
-        - Приведение названий колонок к нижнему регистру с подчеркиваниями
-        - Проверка на наличие невалидных значений
-        - Добавление колонки с количеством слов
+        Предобработка DataFrame с добавлением информации о фильмах.
         """
         df.columns = [col.lower().replace(' ', '_') for col in df.columns]
         
@@ -106,13 +114,16 @@ class TextAnalyzer:
         print(f"Невалидные значения по колонкам:")
         print(df.isnull().sum())
         print(f"Пустые тексты: {df['text'].isnull().sum()}")
+        
         initial_count = len(df)
         df = df.dropna(subset=['text'])
         df = df[df['text'].str.strip() != '']
         removed_count = initial_count - len(df)
         print(f"Удалено строк: {removed_count}")
+        
         df['word_count'] = df['text'].apply(self._count_words)
         df['class_label'] = df['review_type'].map({'good': 1, 'bad': 0})
+        
         return df
 
     def _count_words(self, text):
@@ -123,7 +134,6 @@ class TextAnalyzer:
 
     def get_text_statistics(self, df):
         """Вычисление статистической информации для числовых колонок"""
-        
         numeric_columns = df.select_dtypes(include=['number']).columns
         for col in numeric_columns:
             print(f"\nСтатистика для '{col}':")
@@ -149,13 +159,6 @@ class TextAnalyzer:
     def filter_by_word_count(self, df, max_words):
         """
         Фильтрация DataFrame по максимальному количеству слов
-        
-        Args:
-            df (pd.DataFrame): Исходный DataFrame
-            max_words (int): Максимальное количество слов
-            
-        Returns:
-            pd.DataFrame: Отфильтрованный DataFrame
         """
         filtered_df = df[df['word_count'] <= max_words].sort_values('word_count')
         print(f"\nФильтрация по макс. {max_words} слов:")
@@ -165,13 +168,6 @@ class TextAnalyzer:
     def filter_by_class_label(self, df, class_label):
         """
         Фильтрация DataFrame по метке класса
-        
-        Args:
-            df (pd.DataFrame): Исходный DataFrame
-            class_label: Значение метки класса для фильтрации
-            
-        Returns:
-            pd.DataFrame: Отфильтрованный DataFrame
         """
         filtered_df = df[df['class_label'] == class_label]
         label_name = 'positive' if class_label == 1 else 'negative'
@@ -179,11 +175,28 @@ class TextAnalyzer:
         print(f"Найдено строк: {len(filtered_df)}")
         return filtered_df
 
+    def filter_by_year(self, df, year):
+        """
+        Фильтрация DataFrame по году выпуска фильма
+        """
+        filtered_df = df[df['year'] == year]
+        print(f"\nФильтрация по году: {year}")
+        print(f"Найдено строк: {len(filtered_df)}")
+        return filtered_df
+
+    def filter_by_movie(self, df, movie_title):
+        """
+        Фильтрация DataFrame по названию фильма
+        """
+        filtered_df = df[df['movie_title'] == movie_title]
+        print(f"\nФильтрация по фильму: {movie_title}")
+        print(f"Найдено строк: {len(filtered_df)}")
+        return filtered_df
+
     def calculate_group_statistics(self, df):
         """
         Группировка по метке класса с вычислением статистики по количеству слов
         """
-        
         group_stats = df.groupby('review_type')['word_count'].agg([
             ('min_count', 'min'),
             ('max_count', 'max'), 
@@ -195,6 +208,37 @@ class TextAnalyzer:
         print("Статистика по группам:")
         print(group_stats)
         return group_stats
+
+    def calculate_year_statistics(self, df):
+        """
+        Статистика по годам выпуска фильмов
+        """
+        year_stats = df.groupby('year').agg({
+            'review_type': 'count',
+            'class_label': 'mean',
+            'word_count': 'mean'
+        }).round(2)
+        
+        year_stats.columns = ['total_reviews', 'positive_ratio', 'avg_word_count']
+        print("Статистика по годам:")
+        print(year_stats)
+        return year_stats
+
+    def calculate_movie_statistics(self, df):
+        """
+        Статистика по фильмам
+        """
+        movie_stats = df.groupby('movie_title').agg({
+            'review_type': 'count',
+            'class_label': 'mean',
+            'word_count': 'mean',
+            'year': 'first'
+        }).round(2)
+        
+        movie_stats.columns = ['total_reviews', 'positive_ratio', 'avg_word_count', 'year']
+        print("Статистика по фильмам:")
+        print(movie_stats.sort_values('total_reviews', ascending=False).head(10))
+        return movie_stats
 
     def preprocess_text(self, text):
         """
@@ -220,14 +264,6 @@ class TextAnalyzer:
     def create_word_histogram(self, df, class_label, top_n=20):
         """
         Создание гистограммы частоты слов для заданного класса
-        
-        Args:
-            df (pd.DataFrame): Исходный DataFrame
-            class_label: Метка класса для анализа
-            top_n (int): Количество топ-слов для отображения
-            
-        Returns:
-            tuple: (words, counts) для построения графика
         """
         class_name = 'positive' if class_label == 1 else 'negative'
         df_filtered = df[df['class_label'] == class_label]
@@ -242,7 +278,6 @@ class TextAnalyzer:
             all_lemmas.extend(lemmas)
         
         word_freq = Counter(all_lemmas)
-        
         common_words = word_freq.most_common(top_n)
         
         if not common_words:
@@ -281,12 +316,104 @@ class TextAnalyzer:
         plt.xticks(rotation=45, ha='right')
         plt.grid(axis='y', alpha=0.3)
         plt.tight_layout()
-        filename=f"word_histogram_{class_name}.png"
+        filename = f"word_histogram_{class_name}.png"
         self._save_plot(filename)
+
+    def visualize_year_statistics(self, df):
+        """
+        Визуализация статистики по годам
+        """
+        year_stats = self.calculate_year_statistics(df)
         
+        plt.figure(figsize=(15, 10))
+        
+        plt.subplot(2, 2, 1)
+        plt.bar(year_stats.index, year_stats['total_reviews'], color='lightblue')
+        plt.title('Количество отзывов по годам')
+        plt.xlabel('Год')
+        plt.ylabel('Количество отзывов')
+        plt.xticks(rotation=45)
+        
+        plt.subplot(2, 2, 2)
+        plt.bar(year_stats.index, year_stats['positive_ratio'], color='lightgreen')
+        plt.title('Доля положительных отзывов по годам')
+        plt.xlabel('Год')
+        plt.ylabel('Доля положительных отзывов')
+        plt.xticks(rotation=45)
+        
+        plt.subplot(2, 2, 3)
+        plt.bar(year_stats.index, year_stats['avg_word_count'], color='lightcoral')
+        plt.title('Средняя длина отзывов по годам')
+        plt.xlabel('Год')
+        plt.ylabel('Среднее количество слов')
+        plt.xticks(rotation=45)
+        
+        plt.tight_layout()
+        self._save_plot('year_statistics.png')
+        
+
+    def visualize_movie_statistics(self, df, top_n=15):
+        """
+        Визуализация статистики по фильмам
+        """
+        movie_stats = self.calculate_movie_statistics(df)
+        
+        if movie_stats.empty:
+            print("Нет данных для визуализации по фильмам")
+            return
+            
+        top_movies = movie_stats.nlargest(top_n, 'total_reviews')
+        
+        plt.figure(figsize=(16, 12))
+        
+        plt.subplot(2, 2, 1)
+        plt.barh(range(len(top_movies)), top_movies['total_reviews'], 
+                color='skyblue', alpha=0.7)
+        plt.title(f'Топ-{top_n} фильмов по количеству отзывов', fontsize=14, fontweight='bold')
+        plt.xlabel('Количество отзывов')
+        plt.yticks(range(len(top_movies)), top_movies.index, fontsize=9)
+        
+        for i, v in enumerate(top_movies['total_reviews']):
+            plt.text(v + 0.1, i, str(v), va='center', fontsize=9)
+        
+        plt.subplot(2, 2, 2)
+        colors = ['lightcoral' if x < 0.5 else 'lightgreen' for x in top_movies['positive_ratio']]
+        plt.barh(range(len(top_movies)), top_movies['positive_ratio'], 
+                color=colors, alpha=0.7)
+        plt.title('Доля положительных отзывов по фильмам', fontsize=14, fontweight='bold')
+        plt.xlabel('Доля положительных отзывов')
+        plt.yticks(range(len(top_movies)), top_movies.index, fontsize=9)
+        plt.axvline(x=0.5, color='red', linestyle='--', alpha=0.5)
+        
+        for i, v in enumerate(top_movies['positive_ratio']):
+            plt.text(v + 0.01, i, f'{v:.2f}', va='center', fontsize=9)
+        
+        plt.subplot(2, 2, 3)
+        plt.barh(range(len(top_movies)), top_movies['avg_word_count'], 
+                color='purple', alpha=0.7)
+        plt.title('Средняя длина отзывов по фильмам', fontsize=14, fontweight='bold')
+        plt.xlabel('Среднее количество слов')
+        plt.yticks(range(len(top_movies)), top_movies.index, fontsize=9)
+        
+        for i, v in enumerate(top_movies['avg_word_count']):
+            plt.text(v + 0.1, i, f'{v:.1f}', va='center', fontsize=9)
+        
+        plt.subplot(2, 2, 4)
+        movie_years = df[df['movie_title'].isin(top_movies.index)]
+        movie_sentiment = movie_years.groupby(['movie_title', 'review_type']).size().unstack(fill_value=0)
+        movie_sentiment = movie_sentiment.reindex(top_movies.index)
+        movie_sentiment.plot(kind='barh', stacked=True, ax=plt.gca(), 
+                           color=['lightcoral', 'lightgreen'], alpha=0.7)
+        plt.title('Распределение отзывов по фильмам и типам', fontsize=14, fontweight='bold')
+        plt.xlabel('Количество отзывов')
+        plt.legend(['Отрицательные', 'Положительные'], fontsize=10)
+        
+        plt.tight_layout()
+        self._save_plot('movie_statistics.png')
+
     def analyze_texts_comprehensive(self, good_path='dataset/good', bad_path='dataset/bad'):
         """
-        Полный анализ текстов: от загрузки до визуализации
+        Полный анализ текстов с добавлением статистики по годам и фильмам
         """
         df = self.load_reviews_from_folders(good_path, bad_path)
         print(f"Загружено отзывов: {len(df)}")
@@ -309,6 +436,12 @@ class TextAnalyzer:
         positive_reviews = self.filter_by_class_label(df, class_label=1)
         negative_reviews = self.filter_by_class_label(df, class_label=0)
         group_stats = self.calculate_group_statistics(df)
+        
+        print("СТАТИСТИКА ПО ГОДАМ И ФИЛЬМАМ:")
+        year_stats = self.calculate_year_statistics(df)
+        movie_stats = self.calculate_movie_statistics(df)
+        self.visualize_year_statistics(df)
+        self.visualize_movie_statistics(df)
         
         print("ЧАСТОТА СЛОВ:")
         pos_words, pos_counts = self.create_word_histogram(df, class_label=1, top_n=15)
@@ -341,13 +474,16 @@ class TextAnalyzer:
         
         plt.tight_layout()
         self._save_plot('word_distribution_by_class.png')
+        
         plt.figure(figsize=(8, 6))
         review_counts = df['review_type'].value_counts()
         colors = ['lightgreen', 'lightcoral']
         plt.pie(review_counts.values, labels=review_counts.index, autopct='%1.1f%%', 
                 colors=colors, startangle=90)
         plt.title('Распределение отзывов по типам')
+        plt.tight_layout()
         self._save_plot('reviews_distribution_pie.png')
+        
         plt.figure(figsize=(10, 6))
         group_stats = df.groupby('review_type')['word_count'].agg(['mean', 'median']).round(2)
         
@@ -365,7 +501,6 @@ class TextAnalyzer:
         plt.grid(axis='y', alpha=0.3)
         plt.tight_layout()
         self._save_plot('word_stats_by_class.png')
-        
 
 def main():
     analyzer = TextAnalyzer(threshold=5000)
