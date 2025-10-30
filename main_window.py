@@ -81,8 +81,8 @@ class MovieReviewApp:
         if base64_data:
             return ft.Image(
                 src_base64=base64_data,
-                width=600,
-                height=400,
+                width=1200,
+                height=800,
                 fit=ft.ImageFit.CONTAIN
             )
         else:
@@ -128,6 +128,7 @@ class MovieReviewApp:
         
         self.analytics_status.value = f"Загружено графиков: {loaded_count}"
         self.analytics_status.update()
+        self.page.update()
         return True
     
     def on_tab_change(self, e):
@@ -290,7 +291,6 @@ class MovieReviewApp:
         
         self.analytics_plots_container = ft.Column(
             scroll=ft.ScrollMode.ALWAYS,
-            height=600
         )
         
         management_tab = ft.Tab(
