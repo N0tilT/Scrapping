@@ -8,6 +8,9 @@ from dataset_reorganizer import reorganize_dataset, get_reorganized_stats
 from random_dataset_creator import create_random_dataset, get_random_stats
 from dataset_iterator import ReviewIterator
 from analytics import TextAnalyzer
+from text_classifier import TextClassifier, run_full_experiment
+import threading
+import time
 
 class MovieReviewApp:
     """Основной класс приложения для работы с датасетом ревью фильмов."""
@@ -17,6 +20,8 @@ class MovieReviewApp:
         self.annotation_file_path = ""
         self.analyzer = TextAnalyzer(threshold=5000)
         self.analysis_run = False 
+        self.classifier = TextClassifier()
+        self.model_loaded = False
         
     def check_existing_plots(self):
         """
@@ -332,11 +337,12 @@ class MovieReviewApp:
                 self.analytics_plots_container
             ])
         )
-        
+        classification_tab = self.setup_classification_tab()
+
         tabs = ft.Tabs(
             selected_index=0,
             animation_duration=300,
-            tabs=[management_tab, analytics_tab],
+            tabs=[management_tab, analytics_tab, classification_tab],
             expand=True,
             on_change=self.on_tab_change
         )
@@ -452,6 +458,168 @@ class MovieReviewApp:
         """Отображает результат операции."""
         self.result_text.value = message
         self.result_text.update()
+    
+    def setup_classification_tab(self):
+        """Настройка вкладки классификации"""
+        self.classification_status = ft.Text("", size=16, color=ft.Colors.BLUE)
+        self.classification_progress = ft.ProgressRing(visible=False)
+        
+        self.train_model_btn = ft.ElevatedButton(
+            "Обучить модель",
+            on_click=self.start_training,
+            icon=ft.Icons.TRAIN
+        )
+        
+        self.load_model_btn = ft.ElevatedButton(
+            "Загрузить модель",
+            on_click=self.load_model,
+            icon=ft.Icons.UPLOAD
+        )
+        
+        self.test_text_field = ft.TextField(
+            label="Введите текст для классификации",
+            multiline=True,
+            min_lines=3,
+            max_lines=6,
+            width=600
+        )
+        
+        self.classify_btn = ft.ElevatedButton(
+            "Классифицировать",
+            on_click=self.classify_text,
+            icon=ft.Icons.MANAGE_HISTORY
+        )
+        
+        self.prediction_result = ft.Column([
+            ft.Text("Результат:", size=18, weight=ft.FontWeight.BOLD),
+            ft.Text("", size=16)
+        ], visible=False)
+        
+        self.probability_chart = ft.Column([
+            ft.Text("Вероятности:", size=16, weight=ft.FontWeight.BOLD),
+            ft.Row([
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text("Отрицательный", size=12),
+                        ft.ProgressBar(value=0, width=150),
+                        ft.Text("0%", size=12)
+                    ]),
+                    padding=10
+                ),
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text("Положительный", size=12),
+                        ft.ProgressBar(value=0, width=150),
+                        ft.Text("0%", size=12)
+                    ]),
+                    padding=10
+                )
+            ])
+        ], visible=False)
+        
+        return ft.Tab(
+            text="Классификация",
+            content=ft.Column([
+                ft.Text("Классификация отзывов", size=24, weight=ft.FontWeight.BOLD),
+                ft.Divider(),
+                
+                ft.Text("Обучение модели:", size=18, weight=ft.FontWeight.BOLD),
+                ft.Row([self.train_model_btn, self.load_model_btn, self.classification_progress]),
+                self.classification_status,
+                ft.Divider(),
+                
+                ft.Text("Тестирование модели:", size=18, weight=ft.FontWeight.BOLD),
+                self.test_text_field,
+                self.classify_btn,
+                self.prediction_result,
+                self.probability_chart
+            ])
+        )
+    
+    def start_training(self, e):
+        """Запуск обучения модели в отдельном потоке"""
+        self.classification_progress.visible = True
+        self.classification_status.value = "Запуск обучения модели..."
+        self.train_model_btn.disabled = True
+        self.page.update()
+        
+        def training_thread():
+            try:
+                self.classifier = run_full_experiment()
+                self.model_loaded = True
+                
+                # Обновление UI в основном потоке
+                self.page.run_thread_safe(lambda: self.on_training_complete("Обучение завершено успешно!"))
+                
+            except Exception as ex:
+                self.page.run_thread_safe(lambda: self.on_training_complete(f"Ошибка обучения: {str(ex)}"))
+        
+        thread = threading.Thread(target=training_thread)
+        thread.daemon = True
+        thread.start()
+    
+    def on_training_complete(self, message):
+        """Обработчик завершения обучения"""
+        self.classification_progress.visible = False
+        self.classification_status.value = message
+        self.train_model_btn.disabled = False
+        self.page.update()
+    
+    def load_model(self, e):
+        """Загрузка сохраненной модели"""
+        try:
+            if self.classifier.load_model('best_model.pkl'):
+                self.model_loaded = True
+                self.classification_status.value = "Модель успешно загружена"
+            else:
+                self.classification_status.value = "Не удалось загрузить модель"
+        except Exception as ex:
+            self.classification_status.value = f"Ошибка загрузки: {str(ex)}"
+        
+        self.page.update()
+    
+    def classify_text(self, e):
+        """Классификация введенного текста"""
+        if not self.model_loaded:
+            self.classification_status.value = "Сначала загрузите или обучите модель"
+            self.page.update()
+            return
+        
+        text = self.test_text_field.value.strip()
+        if not text:
+            self.classification_status.value = "Введите текст для классификации"
+            self.page.update()
+            return
+        
+        try:
+            result = self.classifier.predict_sentiment(text)
+            
+            if result:
+                self.prediction_result.controls[1].value = (
+                    f"Тон: {result['sentiment']}\n"
+                    f"Уверенность: {result['confidence']:.2%}"
+                )
+                self.prediction_result.visible = True
+                
+                neg_prob = result['probabilities']['negative']
+                pos_prob = result['probabilities']['positive']
+                
+                neg_container = self.probability_chart.controls[1].controls[0]
+                pos_container = self.probability_chart.controls[1].controls[1]
+                
+                neg_container.content.controls[1].value = neg_prob
+                neg_container.content.controls[2].value = f"{neg_prob:.2%}"
+                pos_container.content.controls[1].value = pos_prob
+                pos_container.content.controls[2].value = f"{pos_prob:.2%}"
+                
+                self.probability_chart.visible = True
+                
+                self.classification_status.value = "Классификация завершена"
+            
+        except Exception as ex:
+            self.classification_status.value = f"Ошибка классификации: {str(ex)}"
+        
+        self.page.update()
 
 
 def main():

@@ -1,0 +1,10 @@
+experiment	model_type	params	train_score	val_score	demo_accuracy	has_probabilities
+logistic_{'C': 1.0, 'max_iter': 10000}	logistic	{'C': 1.0, 'max_iter': 10000}	0.9746153846153847	0.9166666666666666	0.905	True
+svm_{'C': 1.0, 'kernel': 'linear', 'probability': True}	svm	{'C': 1.0, 'kernel': 'linear', 'probability': True}	0.9946153846153846	0.9366666666666666	0.925	True
+svm_{'C': 1.0, 'kernel': 'linear', 'probability': False}	svm	{'C': 1.0, 'kernel': 'linear', 'probability': False}	0.9946153846153846	0.9366666666666666	0.925	False
+random_forest_{'n_estimators': 100, 'max_depth': 10}	random_forest	{'n_estimators': 100, 'max_depth': 10}	0.9476923076923077	0.8633333333333333	0.87	True
+logistic_C_0.1	logistic	{'C': 0.1, 'max_iter': 10000}	0.9423076923076923	0.8966666666666666	0.895	True
+logistic_C_1.0	logistic	{'C': 1.0, 'max_iter': 10000}	0.9746153846153847	0.9166666666666666	0.905	True
+logistic_C_10.0	logistic	{'C': 10.0, 'max_iter': 10000}	1.0	0.94	0.9175	True
+svm_kernel_linear	svm	{'C': 1.0, 'kernel': 'linear', 'probability': True}	0.9946153846153846	0.9366666666666666	0.925	True
+svm_kernel_rbf	svm	{'C': 1.0, 'kernel': 'rbf', 'probability': True}	1.0	0.93	0.915	True
